@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "702991729395",
+    "project_id": "kolko-i-krzyzyk-23259",
+    "storage_bucket": "kolko-i-krzyzyk-23259.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:702991729395:android:1fb4a5fa0e3506ac57ad86",
+        "android_client_info": {
+          "package_name": "com.example.kolko_i_krzyzyk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQW_kelsnV3odGqFvGgx-n1MFi1CnKdg0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
