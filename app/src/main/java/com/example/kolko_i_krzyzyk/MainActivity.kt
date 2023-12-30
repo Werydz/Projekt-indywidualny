@@ -190,6 +190,104 @@ fun TicTacToeGame() {
 }
 
 @Composable
+fun TicTacToeBoard(board: List<Int>, onCellClick: (Int) -> Unit) {
+    val density = LocalDensity.current.density
+    val cellSize = with(density) { 100.dp }
+
+    // Plansza do gry
+    Column(
+        modifier = Modifier
+            .background(Color.Black)
+    ) {
+        for (row in 0 until 3) {
+            Row {
+                for (col in 0 until 3) {
+                    val position = row * 3 + col
+                    val cellValue = board[position]
+                    TicTacToeCell(
+                        value = cellValue,
+                        onClick = { onCellClick(position) },
+                        modifier = Modifier
+                            .size(cellSize)
+                            .padding(3.dp)
+                            .clip(
+                                RoundedCornerShape(
+                                    topStart = if (row == 0) CornerSize(0) else ZeroCornerSize,
+                                    topEnd = if (row == 0) CornerSize(0) else ZeroCornerSize,
+                                    bottomStart = if (row == 2) CornerSize(0) else ZeroCornerSize,
+                                    bottomEnd = if (row == 2) CornerSize(0) else ZeroCornerSize
+                                )
+                            )
+                            .background(Color.White)
+                            .clickable {
+                                onCellClick(position)
+                            }
+                    )
+                }
+            }
+        }
+    }
+}
+
+fun checkForWinner(board: List<Int>): Int {
+    // Sprawdzenie wyganej w wierszach
+    for (i in 0 until 3) {
+        if (board[i * 3] == board[i * 3 + 1] && board[i * 3 + 1] == board[i * 3 + 2] && board[i * 3] != 0) {
+            return board[i * 3]
+        }
+    }
+
+    // Sprawdzenie wyganej w kolumnach
+    for (i in 0 until 3) {
+        if (board[i] == board[i + 3] && board[i + 3] == board[i + 6] && board[i] != 0) {
+            return board[i]
+        }
+    }
+
+    // Sprawdzenie wyganej na skos
+    if (board[0] == board[4] && board[4] == board[8] && board[0] != 0) {
+        return board[0]
+    }
+    if (board[2] == board[4] && board[4] == board[6] && board[2] != 0) {
+        return board[2]
+    }
+
+    return 0
+}
+
+@Composable
+fun GameResultMessage(board: List<Int>, onRestart: () -> Unit) {
+    var resultText by remember { mutableStateOf("") }
+
+    val aWinner = checkForWinner(board)
+    var hasWinner = false
+
+    hasWinner = aWinner!=0
+
+    if (hasWinner) {
+        resultText = "Wygrał gracz $aWinner!"
+    } else if (board.all { it != 0 }) {
+        resultText = "Remis!"
+    }
+
+    if (hasWinner || board.all { it != 0 }) {
+        // Komunikat o wyniku gry
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Text(text = resultText)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRestart) {
+                Text("Zagraj jeszcze raz")
+            }
+        }
+    }
+}
+
+@Composable
 fun SquareGame() {
     // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
     var board by remember { mutableStateOf(List(81) { 0 }) }
@@ -237,46 +335,6 @@ fun SquareGame() {
 }
 
 @Composable
-fun TicTacToeBoard(board: List<Int>, onCellClick: (Int) -> Unit) {
-    val density = LocalDensity.current.density
-    val cellSize = with(density) { 100.dp }
-
-    // Plansza do gry
-    Column(
-        modifier = Modifier
-            .background(Color.Black)
-    ) {
-        for (row in 0 until 3) {
-            Row {
-                for (col in 0 until 3) {
-                    val position = row * 3 + col
-                    val cellValue = board[position]
-                    TicTacToeCell(
-                        value = cellValue,
-                        onClick = { onCellClick(position) },
-                        modifier = Modifier
-                            .size(cellSize)
-                            .padding(3.dp)
-                            .clip(
-                                RoundedCornerShape(
-                                    topStart = if (row == 0) CornerSize(0) else ZeroCornerSize,
-                                    topEnd = if (row == 0) CornerSize(0) else ZeroCornerSize,
-                                    bottomStart = if (row == 2) CornerSize(0) else ZeroCornerSize,
-                                    bottomEnd = if (row == 2) CornerSize(0) else ZeroCornerSize
-                                )
-                            )
-                            .background(Color.White)
-                            .clickable {
-                                onCellClick(position)
-                            }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun SquareBoard(board: List<Int>, onCellClick: (Int) -> Unit) {
     val density = LocalDensity.current.density
     val cellSize = with(density) { 40.dp }
@@ -306,130 +364,6 @@ fun SquareBoard(board: List<Int>, onCellClick: (Int) -> Unit) {
             }
         }
     }
-}
-
-@Composable
-fun TicTacToeCell(value: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val content: @Composable (Modifier) -> Unit = {
-        when (value) {
-            1 -> Circle(modifier = Modifier
-                .size(100.dp))
-            2 -> Cross(modifier = Modifier
-                .size(100.dp))
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .background(Color.White)
-            .clickable { onClick() }
-    ) {
-        content(modifier)
-    }
-}
-
-@Composable
-fun Circle(modifier: Modifier = Modifier) {
-    Box{
-        Image(painter = painterResource(id = R.drawable.kolo), contentDescription = "Kółko")
-    }
-}
-
-@Composable
-fun Cross(modifier: Modifier = Modifier) {
-    Box{
-        Image(painter = painterResource(id = R.drawable.krzyz), contentDescription = "Krzyżyk")
-    }
-}
-
-@Composable
-fun GameResultMessage(board: List<Int>, onRestart: () -> Unit) {
-    var resultText by remember { mutableStateOf("") }
-
-    val aWinner = checkForWinner(board)
-    var hasWinner = false
-
-    hasWinner = aWinner!=0
-
-    if (hasWinner) {
-        resultText = "Wygrał gracz $aWinner!"
-    } else if (board.all { it != 0 }) {
-        resultText = "Remis!"
-    }
-
-    if (hasWinner || board.all { it != 0 }) {
-        // Komunikat o wyniku gry
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            Text(text = resultText)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onRestart) {
-                Text("Zagraj jeszcze raz")
-            }
-        }
-    }
-}
-
-@Composable
-fun SquareGameResultMessage(board: List<Int>, onRestart: () -> Unit) {
-    var resultText by remember { mutableStateOf("") }
-
-    val aWinner = checkForWinnerSquare(board)
-    var hasWinner = false
-
-    hasWinner = aWinner!=0
-
-    if (hasWinner) {
-        resultText = "Wygrał gracz $aWinner!"
-    } else if (board.all { it != 0 }) {
-        resultText = "Remis!"
-    }
-
-    if (hasWinner || board.all { it != 0 }) {
-        // Komunikat o wyniku gry
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            Text(text = resultText)
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onRestart) {
-                Text("Zagraj jeszcze raz")
-            }
-        }
-    }
-}
-
-fun checkForWinner(board: List<Int>): Int {
-    // Sprawdzenie wyganej w wierszach
-    for (i in 0 until 3) {
-        if (board[i * 3] == board[i * 3 + 1] && board[i * 3 + 1] == board[i * 3 + 2] && board[i * 3] != 0) {
-            return board[i * 3]
-        }
-    }
-
-    // Sprawdzenie wyganej w kolumnach
-    for (i in 0 until 3) {
-        if (board[i] == board[i + 3] && board[i + 3] == board[i + 6] && board[i] != 0) {
-            return board[i]
-        }
-    }
-
-    // Sprawdzenie wyganej na skos
-    if (board[0] == board[4] && board[4] == board[8] && board[0] != 0) {
-        return board[0]
-    }
-    if (board[2] == board[4] && board[4] == board[6] && board[2] != 0) {
-        return board[2]
-    }
-
-    return 0
 }
 
 fun checkForWinnerSquare(board: List<Int>): Int {
@@ -485,6 +419,75 @@ fun checkForWinnerSquare(board: List<Int>): Int {
     }
 
     return 0
+}
+
+@Composable
+fun SquareGameResultMessage(board: List<Int>, onRestart: () -> Unit) {
+    var resultText by remember { mutableStateOf("") }
+
+    val aWinner = checkForWinnerSquare(board)
+    var hasWinner = false
+
+    hasWinner = aWinner!=0
+
+    if (hasWinner) {
+        resultText = "Wygrał gracz $aWinner!"
+    } else if (board.all { it != 0 }) {
+        resultText = "Remis!"
+    }
+
+    if (hasWinner || board.all { it != 0 }) {
+        // Komunikat o wyniku gry
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            Text(text = resultText)
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRestart) {
+                Text("Zagraj jeszcze raz")
+            }
+        }
+    }
+}
+
+
+
+
+@Composable
+fun TicTacToeCell(value: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val content: @Composable (Modifier) -> Unit = {
+        when (value) {
+            1 -> Circle(modifier = Modifier
+                .size(100.dp))
+            2 -> Cross(modifier = Modifier
+                .size(100.dp))
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .background(Color.White)
+            .clickable { onClick() }
+    ) {
+        content(modifier)
+    }
+}
+
+@Composable
+fun Circle(modifier: Modifier = Modifier) {
+    Box{
+        Image(painter = painterResource(id = R.drawable.kolo), contentDescription = "Kółko")
+    }
+}
+
+@Composable
+fun Cross(modifier: Modifier = Modifier) {
+    Box{
+        Image(painter = painterResource(id = R.drawable.krzyz), contentDescription = "Krzyżyk")
+    }
 }
 
 @Preview(showBackground = true)
