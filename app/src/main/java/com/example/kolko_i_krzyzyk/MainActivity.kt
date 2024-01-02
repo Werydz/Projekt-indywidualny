@@ -6,33 +6,14 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.ZeroCornerSize
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.modifier.modifierLocalMapOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,6 +30,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.delay
+
+val firebaseDatabase = FirebaseDatabase.getInstance()
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -134,22 +117,6 @@ fun MainScreen(navController: NavHostController) {
 
 @Composable
 fun TicTacToe(navController: NavHostController) {
-    TicTacToeGame()
-}
-
-@Composable
-fun Square(navController: NavHostController) {
-    SquareGame()
-}
-
-@Composable
-fun TicTacToeGame() {
-    // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
-    var board by remember { mutableStateOf(List(9) { 0 }) }
-
-    // Zmienna przechowująca informację o aktualnym graczu
-    var currentPlayer by remember { mutableStateOf(1) }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -157,35 +124,86 @@ fun TicTacToeGame() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Plansza do gry
-        Row {
-            TicTacToeBoard(
-                board = board,
-                onCellClick = { position ->
-                    // Obsługa kliknięcia w komórkę
-                    if (board[position] == 0) {
-                        board = board.toMutableList().also {
-                            it[position] = currentPlayer
-                        }
-                        // Zmiana gracza po kliknięciu
-                        currentPlayer = 3 - currentPlayer
-                    }
-                }
-            )
+        TicTacToeGame()
+        Button(onClick = { navController.popBackStack() }) {
+            Text(text = "<--")
+        }
+    }
+}
+
+@Composable
+fun Square(navController: NavHostController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        SquareGame()
+        Button(onClick = { navController.popBackStack() }) {
+            Text(text = "<--")
+        }
+    }
+}
+
+
+
+@Composable
+fun TicTacToeGame() {
+    val databaseReference = firebaseDatabase.reference
+
+    // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
+    var board by remember { mutableStateOf(List(9) { 0 }) }
+
+    // Zmienna przechowująca informację o aktualnym graczu
+    var currentPlayer by remember { mutableStateOf(1) }
+
+    // Pobranie danych z bazy danych
+    databaseReference.child("KK")
+        .get()
+        .addOnSuccessListener {
+            currentPlayer = it.child("player").value.toString().toInt()
+            board = it.child("board").value as List<Int>
         }
 
-        // Komunikat o wygranej lub remisie
-        Row(
-            modifier = Modifier
-                .padding(1.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            GameResultMessage(board = board, onRestart = {
-                // Resetowanie gry
-                board = List(9) { 0 }
-                currentPlayer = 1
-            })
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ){
+        Button(onClick = { 
+            board = List(9) { 0 }
+            currentPlayer = 1
+            databaseReference.child("KK").child("board").setValue(board)
+            databaseReference.child("KK").child("player").setValue(currentPlayer) }) {
+            Text(text = "Reset")
         }
+        // Plansza do gry
+        TicTacToeBoard(
+            board = board,
+            onCellClick = { position ->
+                // Obsługa kliknięcia w komórkę
+                if (board[position] == 0) {
+                    board = board.toMutableList().also {
+                        it[position] = currentPlayer
+                    }
+                    // Zmiana gracza po kliknięciu
+                    currentPlayer = 3 - currentPlayer
+                }
+                //Wyslanie danych do bazy danych
+                databaseReference.child("KK").child("board").setValue(board)
+                databaseReference.child("KK").child("player").setValue(currentPlayer)
+            }
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        // Komunikat o wygranej lub remisie
+        GameResultMessage(board = board, onRestart = {
+            // Resetowanie gry
+            board = List(9) { 0 }
+            currentPlayer = 1
+            databaseReference.child("KK").child("board").setValue(board)
+            databaseReference.child("KK").child("player").setValue(currentPlayer)
+        })
     }
 }
 
@@ -264,14 +282,13 @@ fun GameResultMessage(board: List<Int>, onRestart: () -> Unit) {
 
     if (hasWinner || board.all { it != 0 }) {
         // Komunikat o wyniku gry
+
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .background(MaterialTheme.colorScheme.background)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(text = resultText)
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Button(onClick = onRestart) {
                 Text("Zagraj jeszcze raz")
             }
@@ -284,6 +301,8 @@ fun GameResultMessage(board: List<Int>, onRestart: () -> Unit) {
 
 @Composable
 fun SquareGame() {
+    val databaseReference = firebaseDatabase.reference
+
     // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
     var board0 by remember { mutableStateOf(List(9) { 0 }) }
     var board1 by remember { mutableStateOf(List(9) { 0 }) }
@@ -301,205 +320,315 @@ fun SquareGame() {
     var currentPlayer by remember { mutableStateOf(1) }
     var plansza by remember { mutableStateOf(0) }
 
+    // Pobranie danych z bazy danych
+    databaseReference.child("KKK")
+        .get()
+        .addOnSuccessListener {
+            currentPlayer = it.child("player").value.toString().toInt()
+            resultsBoard = it.child("results").value as List<Int>
+            board0 = it.child("board0").value as List<Int>
+            board1 = it.child("board1").value as List<Int>
+            board2 = it.child("board2").value as List<Int>
+            board3 = it.child("board3").value as List<Int>
+            board4 = it.child("board4").value as List<Int>
+            board5 = it.child("board5").value as List<Int>
+            board6 = it.child("board6").value as List<Int>
+            board7 = it.child("board7").value as List<Int>
+            board8 = it.child("board8").value as List<Int>
+        }
+
     // Sprawdzanie wygranej na poszczególnych planszach
     when (plansza) {
-        0 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board0)
+        0 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board0)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        1 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board1)
+        1 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board1)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        2 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board2)
+        2 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board2)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        3 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board3)
+        3 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board3)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        4 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board4)
+        4 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board4)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        5 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board5)
+        5 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board5)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        6 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board6)
+        6 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board6)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        7 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board7)
+        7 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board7)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
-        8 -> resultsBoard = resultsBoard.toMutableList().also {
-            it[plansza] = SquareGameBoardResult(board = board8)
+        8 -> {
+            resultsBoard = resultsBoard.toMutableList().also {
+                it[plansza] = SquareGameBoardResult(board = board8)
+            }
+            databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
     }
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(3.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
+            .background(Color.Green)
+            .fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ){
+        Row(
+            modifier = Modifier
+                .background(Color.White)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Button(onClick = {
+                board0 = List(9) { 0 }
+                board1 = List(9) { 0 }
+                board2 = List(9) { 0 }
+                board3 = List(9) { 0 }
+                board4 = List(9) { 0 }
+                board5 = List(9) { 0 }
+                board6 = List(9) { 0 }
+                board7 = List(9) { 0 }
+                board8 = List(9) { 0 }
+                currentPlayer = 1
+                resultsBoard = List(9) { 0 }
+                databaseReference.child("KKK").child("board0").setValue(board0)
+                databaseReference.child("KKK").child("board1").setValue(board1)
+                databaseReference.child("KKK").child("board2").setValue(board2)
+                databaseReference.child("KKK").child("board3").setValue(board3)
+                databaseReference.child("KKK").child("board4").setValue(board4)
+                databaseReference.child("KKK").child("board5").setValue(board5)
+                databaseReference.child("KKK").child("board6").setValue(board6)
+                databaseReference.child("KKK").child("board7").setValue(board7)
+                databaseReference.child("KKK").child("board8").setValue(board8)
+                databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                databaseReference.child("KKK").child("results").setValue(resultsBoard)
+            }) {
+                Text(text = "Reset")
+            }
+        }
         // Plansza do gry
-        Column {
-            // Pierwszy rząd
-            Row {
-                // Zerowa plansza lewy górny róg
-                SquareBoard(
-                    board = board0,
-                    resultsBoard = resultsBoard[0],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board0[position] == 0) {
-                            board0 = board0.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 0
+        // Pierwszy rząd
+        Row {
+            // Zerowa plansza lewy górny róg
+            SquareBoard(
+                board = board0,
+                resultsBoard = resultsBoard[0],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board0[position] == 0) {
+                        board0 = board0.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 0
                     }
-                )
-                // Pierwsza plansza góra środek
-                SquareBoard(
-                    board = board1,
-                    resultsBoard = resultsBoard[1],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board1[position] == 0) {
-                            board1 = board1.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 1
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board0").setValue(board0)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Pierwsza plansza góra środek
+            SquareBoard(
+                board = board1,
+                resultsBoard = resultsBoard[1],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board1[position] == 0) {
+                        board1 = board1.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 1
                     }
-                )
-                // Druga plansz prawy górny róg
-                SquareBoard(
-                    board = board2,
-                    resultsBoard = resultsBoard[2],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board2[position] == 0) {
-                            board2 = board2.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 2
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board1").setValue(board1)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Druga plansz prawy górny róg
+            SquareBoard(
+                board = board2,
+                resultsBoard = resultsBoard[2],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board2[position] == 0) {
+                        board2 = board2.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 2
                     }
-                )
-            }
-            // Drugi rząd
-            Row {
-                // Trzecia plansza środek prawo
-                SquareBoard(
-                    board = board3,
-                    resultsBoard = resultsBoard[3],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board3[position] == 0) {
-                            board3 = board3.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 3
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board2").setValue(board2)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        // Drugi rząd
+        Row {
+            // Trzecia plansza środek prawo
+            SquareBoard(
+                board = board3,
+                resultsBoard = resultsBoard[3],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board3[position] == 0) {
+                        board3 = board3.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 3
                     }
-                )
-                // Czwarta plansza w samym środku
-                SquareBoard(
-                    board = board4,
-                    resultsBoard = resultsBoard[4],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board4[position] == 0) {
-                            board4 = board4.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 4
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board3").setValue(board3)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Czwarta plansza w samym środku
+            SquareBoard(
+                board = board4,
+                resultsBoard = resultsBoard[4],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board4[position] == 0) {
+                        board4 = board4.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 4
                     }
-                )
-                // Piąta plansza środek po prawej
-                SquareBoard(
-                    board = board5,
-                    resultsBoard = resultsBoard[5],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board5[position] == 0) {
-                            board5 = board5.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 5
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board4").setValue(board4)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Piąta plansza środek po prawej
+            SquareBoard(
+                board = board5,
+                resultsBoard = resultsBoard[5],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board5[position] == 0) {
+                        board5 = board5.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 5
                     }
-                )
-            }
-            // Trzeci rząd
-            Row {
-                // Szósta plansza lewy dolny róg
-                SquareBoard(
-                    board = board6,
-                    resultsBoard = resultsBoard[6],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board6[position] == 0) {
-                            board6 = board6.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 6
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board5").setValue(board5)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        // Trzeci rząd
+        Row {
+            // Szósta plansza lewy dolny róg
+            SquareBoard(
+                board = board6,
+                resultsBoard = resultsBoard[6],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board6[position] == 0) {
+                        board6 = board6.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 6
                     }
-                )
-                // Siódma plansza dół środek
-                SquareBoard(
-                    board = board7,
-                    resultsBoard = resultsBoard[7],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board7[position] == 0) {
-                            board7 = board7.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 7
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board6").setValue(board6)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Siódma plansza dół środek
+            SquareBoard(
+                board = board7,
+                resultsBoard = resultsBoard[7],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board7[position] == 0) {
+                        board7 = board7.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 7
                     }
-                )
-                // Ósma plansza prawy dolny róg
-                SquareBoard(
-                    board = board8,
-                    resultsBoard = resultsBoard[8],
-                    onCellClick = { position ->
-                        // Obsługa kliknięcia w komórkę
-                        if (board8[position] == 0) {
-                            board8 = board8.toMutableList().also {
-                                it[position] = currentPlayer
-                            }
-                            // Zmiana gracza po kliknięciu
-                            currentPlayer = 3 - currentPlayer
-                            plansza = 8
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board7").setValue(board7)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            // Ósma plansza prawy dolny róg
+            SquareBoard(
+                board = board8,
+                resultsBoard = resultsBoard[8],
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board8[position] == 0) {
+                        board8 = board8.toMutableList().also {
+                            it[position] = currentPlayer
                         }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                        plansza = 8
                     }
-                )
-            }
+                    // Wysyłanie do bazy
+                    databaseReference.child("KKK").child("board8").setValue(board8)
+                    databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                }
+            )
         }
 
         // Komunikat o wygranej lub remisie
         Row(
             modifier = Modifier
-                .padding(1.dp),
+                .background(Color.White)
+                .fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
             SquareGameResultMessage(board = resultsBoard, onRestart = {
@@ -515,6 +644,17 @@ fun SquareGame() {
                 board8 = List(9) { 0 }
                 currentPlayer = 1
                 resultsBoard = List(9) { 0 }
+                databaseReference.child("KKK").child("board0").setValue(board0)
+                databaseReference.child("KKK").child("board1").setValue(board1)
+                databaseReference.child("KKK").child("board2").setValue(board2)
+                databaseReference.child("KKK").child("board3").setValue(board3)
+                databaseReference.child("KKK").child("board4").setValue(board4)
+                databaseReference.child("KKK").child("board5").setValue(board5)
+                databaseReference.child("KKK").child("board6").setValue(board6)
+                databaseReference.child("KKK").child("board7").setValue(board7)
+                databaseReference.child("KKK").child("board8").setValue(board8)
+                databaseReference.child("KKK").child("player").setValue(currentPlayer)
+                databaseReference.child("KKK").child("results").setValue(resultsBoard)
             })
         }
     }
@@ -538,10 +678,10 @@ fun SquareBoard(board: List<Int>, resultsBoard: Int, onCellClick: (Int) -> Unit)
                         val cellValue = board[position]
                         TicTacToeCell(
                             value = cellValue,
-                            onClick = { onCellClick(position) },
+                            onClick = { onCellClick(position)},
                             modifier = Modifier
                                 .size(cellSize)
-                                .padding(2.dp)
+                                .padding(1.dp)
                                 .background(Color.White)
                                 .clickable {
                                     onCellClick(position)
@@ -610,9 +750,8 @@ fun SquareGameResultMessage(board: List<Int>, onRestart: () -> Unit) {
         // Komunikat o wyniku gry
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .background(MaterialTheme.colorScheme.background)
+                .padding(2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(text = resultText)
             Spacer(modifier = Modifier.height(16.dp))
