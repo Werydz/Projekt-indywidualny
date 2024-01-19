@@ -1,3 +1,5 @@
+@file:Suppress("VARIABLE_WITH_REDUNDANT_INITIALIZER")
+
 package com.example.kolko_i_krzyzyk
 
 import android.os.Bundle
@@ -11,25 +13,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.modifier.modifierLocalMapOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.kolko_i_krzyzyk.ui.theme.Kolko_i_krzyzykTheme
-import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
 import com.google.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Timer
+import java.util.TimerTask
 
 val firebaseDatabase = FirebaseDatabase.getInstance()
 
@@ -70,6 +69,34 @@ fun Nawigacja(){
         }
         composable("square"){
             Square(navController)
+        }
+        composable("rule"){
+            Rule(navController)
+        }
+    }
+}
+
+@Composable
+fun Rule(navController: NavHostController) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(5.dp)
+            .background(Color.White),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(text = "1. Celem gry jest skreślenie linii poziomej, pionowej albo ukośnej na dużej planszy. \n" +
+                "2. Jeśli się nie uda wygrywa osoba, która zdobyła więcej małych pól. \n" +
+                "3. Małe pola zdobywa się tak jak w normalnej grze, układając linię z elementów. \n" +
+                "4. Gracz rozpoczynający posiada pełną dowolność w wyborze planszy, na której zacznie. \n" +
+                "5. Przy kolejnych ruchach gracze nie wybrają samodzielnie pola, pozycja jest determinowana przez to, w którym miejscu małej planszy swój symbol postawił poprzedni gracz. \n " +
+                "6. To miejsce określa na którym dużym polu kolejny gracz musi postawić swój symbol \n" +
+                "7. Jeśli gracz zostanie skierowany na małą planszę, która jest już rozstrzygnięta, może wybrać, na którym polu postawi swój symbol. \n" +
+                "8. Remis na małej planszy, powoduje, że plansza jest spalona – nie liczy się ani dla jednego, ani dla drugiego gracza. \n" +
+                "Miłej gry!")
+        Button(onClick = { navController.popBackStack() }) {
+            Text(text = "<--")
         }
     }
 }
@@ -125,9 +152,9 @@ fun TicTacToe(navController: NavHostController) {
         verticalArrangement = Arrangement.Center
     ) {
         TicTacToeGame()
-        Button(onClick = { navController.popBackStack() }) {
-            Text(text = "<--")
-        }
+           Button(onClick = { navController.popBackStack() }) {
+               Text(text = "<--")
+           }
     }
 }
 
@@ -140,6 +167,9 @@ fun Square(navController: NavHostController) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Button(onClick = { navController.navigate("rule") }) {
+            Text(text = "Zasady")
+        }
         SquareGame()
         Button(onClick = { navController.popBackStack() }) {
             Text(text = "<--")
@@ -152,6 +182,7 @@ fun Square(navController: NavHostController) {
 @Composable
 fun TicTacToeGame() {
     val databaseReference = firebaseDatabase.reference
+    val coroutineScope = rememberCoroutineScope()
 
     // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
     var board by remember { mutableStateOf(List(9) { 0 }) }
@@ -159,52 +190,64 @@ fun TicTacToeGame() {
     // Zmienna przechowująca informację o aktualnym graczu
     var currentPlayer by remember { mutableStateOf(1) }
 
-    // Pobranie danych z bazy danych
-    databaseReference.child("KK")
-        .get()
-        .addOnSuccessListener {
-            currentPlayer = it.child("player").value.toString().toInt()
-            board = it.child("board").value as List<Int>
-        }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ){
-        Button(onClick = { 
-            board = List(9) { 0 }
-            currentPlayer = 1
-            databaseReference.child("KK").child("board").setValue(board)
-            databaseReference.child("KK").child("player").setValue(currentPlayer) }) {
-            Text(text = "Reset")
-        }
-        // Plansza do gry
-        TicTacToeBoard(
-            board = board,
-            onCellClick = { position ->
-                // Obsługa kliknięcia w komórkę
-                if (board[position] == 0) {
-                    board = board.toMutableList().also {
-                        it[position] = currentPlayer
-                    }
-                    // Zmiana gracza po kliknięciu
-                    currentPlayer = 3 - currentPlayer
+    // LaunchedEffect do uruchamiania automatycznego odświeżania co 1 sekund
+    LaunchedEffect(true) {
+        val timer = Timer()
+        timer.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                coroutineScope.launch {
+                    // Pobranie danych z bazy danych
+                    databaseReference.child("KK")
+                        .get()
+                        .addOnSuccessListener {
+                            currentPlayer = it.child("player").value.toString().toInt()
+                            board = it.child("board").value as List<Int>
+                        }
                 }
-                //Wyslanie danych do bazy danych
+            }
+        }, 0, 1000) // Odświeżanie co 1 sekund (1000 milisekund)
+    }
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Button(onClick = {
+                board = List(9) { 0 }
+                currentPlayer = 1
                 databaseReference.child("KK").child("board").setValue(board)
                 databaseReference.child("KK").child("player").setValue(currentPlayer)
+            }) {
+                Text(text = "Reset")
             }
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        // Komunikat o wygranej lub remisie
-        GameResultMessage(board = board, onRestart = {
-            // Resetowanie gry
-            board = List(9) { 0 }
-            currentPlayer = 1
-            databaseReference.child("KK").child("board").setValue(board)
-            databaseReference.child("KK").child("player").setValue(currentPlayer)
-        })
-    }
+            // Plansza do gry
+            TicTacToeBoard(
+                board = board,
+                onCellClick = { position ->
+                    // Obsługa kliknięcia w komórkę
+                    if (board[position] == 0) {
+                        board = board.toMutableList().also {
+                            it[position] = currentPlayer
+                        }
+                        // Zmiana gracza po kliknięciu
+                        currentPlayer = 3 - currentPlayer
+                    }
+                    //Wyslanie danych do bazy danych
+                    databaseReference.child("KK").child("board").setValue(board)
+                    databaseReference.child("KK").child("player").setValue(currentPlayer)
+                }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            // Komunikat o wygranej lub remisie
+            GameResultMessage(board = board, onRestart = {
+                // Resetowanie gry
+                board = List(9) { 0 }
+                currentPlayer = 1
+                databaseReference.child("KK").child("board").setValue(board)
+                databaseReference.child("KK").child("player").setValue(currentPlayer)
+            })
+        }
+
 }
 
 @Composable
@@ -302,6 +345,8 @@ fun GameResultMessage(board: List<Int>, onRestart: () -> Unit) {
 @Composable
 fun SquareGame() {
     val databaseReference = firebaseDatabase.reference
+    val coroutineScope = rememberCoroutineScope()
+    val backgroundColor = MaterialTheme.colorScheme.background
 
     // Tablica przechowująca stan planszy (0 - puste pole, 1 - kółko, 2 - krzyżyk)
     var board0 by remember { mutableStateOf(List(9) { 0 }) }
@@ -320,76 +365,86 @@ fun SquareGame() {
     var currentPlayer by remember { mutableStateOf(1) }
     var plansza by remember { mutableStateOf(0) }
 
-    // Pobranie danych z bazy danych
-    databaseReference.child("KKK")
-        .get()
-        .addOnSuccessListener {
-            currentPlayer = it.child("player").value.toString().toInt()
-            resultsBoard = it.child("results").value as List<Int>
-            board0 = it.child("board0").value as List<Int>
-            board1 = it.child("board1").value as List<Int>
-            board2 = it.child("board2").value as List<Int>
-            board3 = it.child("board3").value as List<Int>
-            board4 = it.child("board4").value as List<Int>
-            board5 = it.child("board5").value as List<Int>
-            board6 = it.child("board6").value as List<Int>
-            board7 = it.child("board7").value as List<Int>
-            board8 = it.child("board8").value as List<Int>
-        }
+    // LaunchedEffect do uruchamiania automatycznego odświeżania co 1 sekund
+    LaunchedEffect(true) {
+        val timer = Timer()
+        timer.scheduleAtFixedRate(object : TimerTask() {
+            override fun run() {
+                coroutineScope.launch {
+                    // Pobranie danych z bazy danych
+                    databaseReference.child("KKK")
+                        .get()
+                        .addOnSuccessListener {
+                            currentPlayer = it.child("player").value.toString().toInt()
+                            resultsBoard = it.child("results").value as List<Int>
+                            board0 = it.child("board0").value as List<Int>
+                            board1 = it.child("board1").value as List<Int>
+                            board2 = it.child("board2").value as List<Int>
+                            board3 = it.child("board3").value as List<Int>
+                            board4 = it.child("board4").value as List<Int>
+                            board5 = it.child("board5").value as List<Int>
+                            board6 = it.child("board6").value as List<Int>
+                            board7 = it.child("board7").value as List<Int>
+                            board8 = it.child("board8").value as List<Int>
+                        }
+                }
+            }
+        }, 0, 1000) // Odświeżanie co 1 sekund (1000 milisekund)
+    }
 
     // Sprawdzanie wygranej na poszczególnych planszach
     when (plansza) {
         0 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board0)
+                it[plansza] = squareGameBoardResult(board = board0)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         1 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board1)
+                it[plansza] = squareGameBoardResult(board = board1)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         2 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board2)
+                it[plansza] = squareGameBoardResult(board = board2)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         3 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board3)
+                it[plansza] = squareGameBoardResult(board = board3)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         4 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board4)
+                it[plansza] = squareGameBoardResult(board = board4)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         5 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board5)
+                it[plansza] = squareGameBoardResult(board = board5)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         6 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board6)
+                it[plansza] = squareGameBoardResult(board = board6)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         7 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board7)
+                it[plansza] = squareGameBoardResult(board = board7)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
         8 -> {
             resultsBoard = resultsBoard.toMutableList().also {
-                it[plansza] = SquareGameBoardResult(board = board8)
+                it[plansza] = squareGameBoardResult(board = board8)
             }
             databaseReference.child("KKK").child("results").setValue(resultsBoard)
         }
@@ -403,7 +458,7 @@ fun SquareGame() {
     ){
         Row(
             modifier = Modifier
-                .background(Color.White)
+                .background(backgroundColor)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.Center
         ) {
@@ -763,17 +818,17 @@ fun SquareGameResultMessage(board: List<Int>, onRestart: () -> Unit) {
 }
 
 @Composable
-fun SquareGameBoardResult(board: List<Int>): Int {
+fun squareGameBoardResult(board: List<Int>): Int {
     var hasWinner = false
 
     val aWinner = checkForWinnerSquare(board)
 
     hasWinner = aWinner!=0
 
-    if (hasWinner) {
-        return aWinner
+    return if (hasWinner) {
+        aWinner
     }
-    else return 0
+    else 0
 }
 
 
@@ -783,10 +838,8 @@ fun SquareGameBoardResult(board: List<Int>): Int {
 fun TicTacToeCell(value: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val content: @Composable (Modifier) -> Unit = {
         when (value) {
-            1 -> Circle(modifier = Modifier
-                .size(100.dp))
-            2 -> Cross(modifier = Modifier
-                .size(100.dp))
+            1 -> Circle()
+            2 -> Cross()
         }
     }
 
@@ -800,14 +853,14 @@ fun TicTacToeCell(value: Int, onClick: () -> Unit, modifier: Modifier = Modifier
 }
 
 @Composable
-fun Circle(modifier: Modifier = Modifier) {
+fun Circle() {
     Box{
         Image(painter = painterResource(id = R.drawable.kolo), contentDescription = "Kółko")
     }
 }
 
 @Composable
-fun Cross(modifier: Modifier = Modifier) {
+fun Cross() {
     Box{
         Image(painter = painterResource(id = R.drawable.krzyz), contentDescription = "Krzyżyk")
     }
